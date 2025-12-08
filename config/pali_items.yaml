@@ -1,0 +1,825 @@
+epics:
+  - id: PALI-E1
+    phase: Phase 1 – Codex
+    priority: P0
+    title: Codex Ingestion Backbone
+    description: >
+      Build the core data backbone that ingests public-domain books and stores them
+      in a normalized Codex format (book, chapters, characters, metadata), ready
+      for automated and scalable analysis and video pipelines.
+    stories:
+
+      # S1 – Architecture, runtime flow, scalability, shifts
+      - id: PALI-E1-S1
+        priority: P0
+        title: Architecture & Runtime Backbone
+        description: >
+          Define the overall architecture, runtime flow, SQLite schema, folder layout,
+          event logs, error handling, GPU shift scheduling, and scalability model for
+          the Codex pipeline.
+        tasks:
+          - id: PALI-E1-S1-T1
+            priority: P0
+            title: Define end-to-end Codex pipeline flow
+            description: >
+              Sketch the full flow from SQLite row + HTML files to Codex JSON, including
+              all major stages and their responsibilities.
+            subtasks:
+              - id: PALI-E1-S1-T1-ST1
+                priority: P1
+                title: Map high-level stages
+                description: >
+                  Identify and name the major stages: registry scan, HTML load, chapter
+                  extract, scenes, summaries, entities, and Codex write.
+              - id: PALI-E1-S1-T1-ST2
+                priority: P1
+                title: Define stage inputs/outputs
+                description: >
+                  Write input/output contracts for each stage, including filenames,
+                  formats, and status flags.
+              - id: PALI-E1-S1-T1-ST3
+                priority: P2
+                title: Identify failure points
+                description: >
+                  List where failures can occur in the pipeline and what data is needed
+                  to debug and retry them.
+
+          - id: PALI-E1-S1-T2
+            priority: P0
+            title: Design SQLite schema & status tracking
+            description: >
+              Design the SQLite tables to track books, runs, shifts, events, and error
+              states for the Codex pipeline.
+            subtasks:
+              - id: PALI-E1-S1-T2-ST1
+                priority: P0
+                title: Book registry table schema
+                description: >
+                  Define columns for book_id, title, author, source paths, and Codex
+                  status flags.
+              - id: PALI-E1-S1-T2-ST2
+                priority: P1
+                title: Run/shift tracking tables
+                description: >
+                  Define tables to record pipeline runs, shift windows, start/end times,
+                  and overall run status.
+              - id: PALI-E1-S1-T2-ST3
+                priority: P1
+                title: Event & error log tables
+                description: >
+                  Define tables to store per-stage events, warnings, and errors tied to
+                  book_id and run_id.
+
+          - id: PALI-E1-S1-T3
+            priority: P1
+            title: Project folder initializer
+            description: >
+              Implement a script that boots a new project folder with standard layout,
+              SQLite file, and config templates.
+            subtasks:
+              - id: PALI-E1-S1-T3-ST1
+                priority: P1
+                title: Define canonical folder layout
+                description: >
+                  Decide folder structure for raw HTML, Codex JSON, logs, and temp artifacts.
+              - id: PALI-E1-S1-T3-ST2
+                priority: P1
+                title: Implement init script
+                description: >
+                  Write a CLI script that creates the base folders, SQLite DB, and default
+                  config files.
+              - id: PALI-E1-S1-T3-ST3
+                priority: P2
+                title: Add runtime config template
+                description: >
+                  Provide a config template for GPU shifts, paths, concurrency, and runtime
+                  parameters.
+
+          - id: PALI-E1-S1-T4
+            priority: P0
+            title: Shift-aware runtime loop
+            description: >
+              Implement a loop that continuously monitors the registry and only runs heavy
+              work inside allowed GPU shift windows.
+            subtasks:
+              - id: PALI-E1-S1-T4-ST1
+                priority: P0
+                title: Represent shift windows in config
+                description: >
+                  Decide how to represent allowed GPU time windows in config and/or SQLite.
+              - id: PALI-E1-S1-T4-ST2
+                priority: P0
+                title: Implement shift guard logic
+                description: >
+                  Implement guard logic that checks current time vs shift windows and
+                  pauses/resumes work.
+              - id: PALI-E1-S1-T4-ST3
+                priority: P1
+                title: Integrate registry scan + shift guard
+                description: >
+                  Combine registry scanning with shift checks so only eligible books run
+                  during active windows.
+
+          - id: PALI-E1-S1-T5
+            priority: P1
+            title: Error handling and rerun strategy
+            description: >
+              Define how failed stages are marked, logged, and retried without manual hacking.
+            subtasks:
+              - id: PALI-E1-S1-T5-ST1
+                priority: P1
+                title: Define retryable vs fatal error rules
+                description: >
+                  Decide which errors can be retried automatically and which should
+                  stop the pipeline for that book.
+              - id: PALI-E1-S1-T5-ST2
+                priority: P1
+                title: Implement rerun flags in SQLite
+                description: >
+                  Store per-book and per-stage status flags to enable clean reruns without
+                  double work.
+              - id: PALI-E1-S1-T5-ST3
+                priority: P2
+                title: Add rerun CLI entrypoints
+                description: >
+                  Implement CLI commands to rerun specific books or stages based on
+                  recorded errors.
+
+          - id: PALI-E1-S1-T6
+            priority: P1
+            title: Scalability & run modes design
+            description: >
+              Design how the pipeline supports both single-book runs and scalable batch
+              execution like a proper software product.
+            subtasks:
+              - id: PALI-E1-S1-T6-ST1
+                priority: P1
+                title: Define run modes (single, batch, scheduled)
+                description: >
+                  Specify run modes for single-book debugging, batch runs, and scheduled
+                  shift-based execution.
+              - id: PALI-E1-S1-T6-ST2
+                priority: P1
+                title: Concurrency & parallelism strategy
+                description: >
+                  Decide how many books/stages can run in parallel without overloading
+                  the GPU or storage.
+              - id: PALI-E1-S1-T6-ST3
+                priority: P2
+                title: Idempotency & safe re-runs
+                description: >
+                  Ensure each stage can be re-run safely without corrupting Codex data.
+
+      # S2 – HTML → Chapters with parser PoC (BeautifulSoup vs Docling) + agents hook
+      - id: PALI-E1-S2
+        priority: P0
+        title: Robust HTML → Chapter Extraction
+        description: >
+          Implement a reliable pipeline to read full HTML files and emit clean,
+          ordered chapters with strong validation, using the best parser stack for the job.
+        tasks:
+          - id: PALI-E1-S2-T1
+            priority: P0
+            title: Analyze target HTML patterns
+            description: >
+              Inspect sample public-domain HTML files and document how chapters, titles,
+              and dividers are usually marked.
+            subtasks:
+              - id: PALI-E1-S2-T1-ST1
+                priority: P0
+                title: Collect sample HTML books
+                description: >
+                  Gather a small set of representative HTML books from different sources
+                  for analysis.
+              - id: PALI-E1-S2-T1-ST2
+                priority: P1
+                title: Document chapter markers
+                description: >
+                  Note the tags, headings, and patterns that indicate chapter boundaries
+                  for each sample.
+              - id: PALI-E1-S2-T1-ST3
+                priority: P1
+                title: Identify edge cases
+                description: >
+                  List tricky patterns like prologues, epilogues, and non-chapter
+                  headings that could confuse detection.
+
+          - id: PALI-E1-S2-T2
+            priority: P0
+            title: PoC HTML parsing libraries (BeautifulSoup vs Docling)
+            description: >
+              Run a PoC comparing BeautifulSoup and Docling for extracting clean text
+              and structure from sample HTML books.
+            subtasks:
+              - id: PALI-E1-S2-T2-ST1
+                priority: P0
+                title: Build BeautifulSoup PoC
+                description: >
+                  Implement a small script that uses BeautifulSoup to parse one or two
+                  sample books into chapter-like sections.
+              - id: PALI-E1-S2-T2-ST2
+                priority: P0
+                title: Build Docling PoC
+                description: >
+                  Implement a small script that uses Docling to parse the same sample
+                  books into structured output.
+              - id: PALI-E1-S2-T2-ST3
+                priority: P1
+                title: Compare robustness, speed, and output quality
+                description: >
+                  Compare parsing approaches on text coverage, structural fidelity,
+                  and performance, and pick a default stack.
+
+          - id: PALI-E1-S2-T3
+            priority: P0
+            title: Implement HTML chapter extractor
+            description: >
+              Based on the chosen parsing approach, implement the logic that reads full
+              HTML and splits it into ordered chapter objects with title + content.
+            subtasks:
+              - id: PALI-E1-S2-T3-ST1
+                priority: P0
+                title: Build chapter parsing function
+                description: >
+                  Write a function that takes parsed HTML output and returns a list of
+                  chapter objects with title and raw text.
+              - id: PALI-E1-S2-T3-ST2
+                priority: P1
+                title: Handle boilerplate removal
+                description: >
+                  Strip Gutenberg headers, license sections, and unrelated boilerplate
+                  from chapter content.
+              - id: PALI-E1-S2-T3-ST3
+                priority: P1
+                title: Support multiple HTML layouts
+                description: >
+                  Add basic branching logic or strategies to handle more than one common
+                  HTML structure.
+
+          - id: PALI-E1-S2-T4
+            priority: P1
+            title: Chapter validation & completeness checks
+            description: >
+              Add checks to ensure no chapters or large chunks of text are missing after extraction.
+            subtasks:
+              - id: PALI-E1-S2-T4-ST1
+                priority: P1
+                title: Word/char count comparison
+                description: >
+                  Compare total text length of the original HTML vs summed chapters to
+                  catch major gaps.
+              - id: PALI-E1-S2-T4-ST2
+                priority: P1
+                title: Chapter count sanity checks
+                description: >
+                  Compare detected chapter count against expected patterns or manual hints
+                  when available.
+              - id: PALI-E1-S2-T4-ST3
+                priority: P2
+                title: Validation report logging
+                description: >
+                  Log validation metrics per book to SQLite and/or files for easy
+                  inspection.
+
+          - id: PALI-E1-S2-T5
+            priority: P2
+            title: Explore agent-assisted structure detection (optional)
+            description: >
+              Explore whether LLM agents can help detect unusual chapter structures for
+              problematic HTML files.
+            subtasks:
+              - id: PALI-E1-S2-T5-ST1
+                priority: P2
+                title: Identify failure cases for rule-based parser
+                description: >
+                  Flag books where chapter extraction fails or looks suspicious and
+                  collect samples.
+              - id: PALI-E1-S2-T5-ST2
+                priority: P2
+                title: Draft agent prompt for structure hints
+                description: >
+                  Create a prompt that asks an agent to infer chapter-like divisions or
+                  section boundaries from raw text.
+              - id: PALI-E1-S2-T5-ST3
+                priority: P2
+                title: Evaluate agent vs rule-based fixes
+                description: >
+                  Compare whether agent suggestions actually help recover structure in
+                  problematic books.
+
+          - id: PALI-E1-S2-T6
+            priority: P1
+            title: Tests & CLI wrapper for chapter extraction
+            description: >
+              Wrap chapter extraction in a CLI and add tests over sample books.
+            subtasks:
+              - id: PALI-E1-S2-T6-ST1
+                priority: P1
+                title: Add unit tests for extraction
+                description: >
+                  Write tests that assert chapter counts, titles, and basic content
+                  patterns for sample books.
+              - id: PALI-E1-S2-T6-ST2
+                priority: P1
+                title: Implement chapter-extract CLI
+                description: >
+                  Provide a CLI command to run chapter extraction for a given book_id
+                  or HTML file path.
+              - id: PALI-E1-S2-T6-ST3
+                priority: P2
+                title: Integrate with registry
+                description: >
+                  Update the book registry status when chapter extraction succeeds or fails.
+
+      # S3 – Scene extraction with multi-agent voting (includes agent framework eval)
+      - id: PALI-E1-S3
+        priority: P0
+        title: Scene Extraction via Multi-Agent Voting
+        description: >
+          Break each chapter into scenes using AI agents, with multiple agents voting
+          on scene boundaries and metadata, built on a chosen agent framework.
+        tasks:
+          - id: PALI-E1-S3-T0
+            priority: P0
+            title: Evaluate agent frameworks & orchestration options
+            description: >
+              Compare LangChain, Strands, Google AI SDK, and similar frameworks to choose
+              an agent orchestration stack for scene and analysis tasks.
+            subtasks:
+              - id: PALI-E1-S3-T0-ST1
+                priority: P0
+                title: Survey agent frameworks (LangChain, Strands, Google AI SDK, etc.)
+                description: >
+                  Read docs and examples for major agent frameworks relevant to Python
+                  and your current stack.
+              - id: PALI-E1-S3-T0-ST2
+                priority: P0
+                title: Compare capabilities vs project needs
+                description: >
+                  Compare frameworks on ease of orchestration, tool integration,
+                  observability, and long-running pipelines.
+              - id: PALI-E1-S3-T0-ST3
+                priority: P1
+                title: Pick a recommended stack & minimal skeleton
+                description: >
+                  Choose one primary stack (and maybe a backup) and implement a tiny
+                  “hello world” agent flow wired to your logging/runtime model.
+
+          - id: PALI-E1-S3-T1
+            priority: P0
+            title: Define scene model & metadata fields
+            description: >
+              Decide how scenes are represented in Codex, including fields like who,
+              where, when, and what happens.
+            subtasks:
+              - id: PALI-E1-S3-T1-ST1
+                priority: P0
+                title: List essential scene fields
+                description: >
+                  Define the minimum fields for each scene: participants, location,
+                  time context, and core action.
+              - id: PALI-E1-S3-T1-ST2
+                priority: P1
+                title: Scene-to-chapter mapping rules
+                description: >
+                  Decide how scenes reference chapters and text spans so they can be
+                  traced back to original text.
+              - id: PALI-E1-S3-T1-ST3
+                priority: P1
+                title: Update Codex schema for scenes
+                description: >
+                  Extend the Codex schema to store per-chapter scenes and their metadata.
+
+          - id: PALI-E1-S3-T2
+            priority: P1
+            title: Design multi-agent prompts for scene splitting
+            description: >
+              Design prompts and instructions for agents that propose and refine scene
+              boundaries for a given chapter.
+            subtasks:
+              - id: PALI-E1-S3-T2-ST1
+                priority: P1
+                title: Draft single-agent scene-splitting prompt
+                description: >
+                  Create an initial prompt that asks one agent to propose scene
+                  boundaries and descriptions for a chapter.
+              - id: PALI-E1-S3-T2-ST2
+                priority: P1
+                title: Design reviewer/refiner prompts
+                description: >
+                  Write prompts for second/third agents that critique and adjust
+                  the initial scene proposals.
+              - id: PALI-E1-S3-T2-ST3
+                priority: P2
+                title: Define voting/consensus rules
+                description: >
+                  Decide how agent outputs are merged into a final single list of
+                  scenes per chapter.
+
+          - id: PALI-E1-S3-T3
+            priority: P1
+            title: Implement scene extraction POC
+            description: >
+              Build a POC pipeline that runs multiple agents on a chapter and produces
+              a final scene list.
+            subtasks:
+              - id: PALI-E1-S3-T3-ST1
+                priority: P1
+                title: Implement supervisor-agent loop
+                description: >
+                  Implement a supervisor that orchestrates base agents, reviewers,
+                  and the final merge step using the chosen framework.
+              - id: PALI-E1-S3-T3-ST2
+                priority: P1
+                title: Run POC on sample chapters
+                description: >
+                  Test the scene extraction flow on a few chapters and inspect the
+                  quality of scene splits.
+              - id: PALI-E1-S3-T3-ST3
+                priority: P2
+                title: Store scenes into Codex
+                description: >
+                  Write the final scenes and metadata back into the Codex file for
+                  each tested book.
+
+          - id: PALI-E1-S3-T4
+            priority: P2
+            title: Generalize scene extraction to all chapters
+            description: >
+              Extend the POC to run over all chapters for eligible books and record
+              results at scale.
+            subtasks:
+              - id: PALI-E1-S3-T4-ST1
+                priority: P2
+                title: Integrate with registry & runtime
+                description: >
+                  Make scene extraction a stage in the main pipeline controlled by
+                  the runtime loop and book statuses.
+              - id: PALI-E1-S3-T4-ST2
+                priority: P2
+                title: Add error handling for bad outputs
+                description: >
+                  Detect and handle obviously broken scene outputs (empty, duplicate,
+                  or conflicting ranges).
+              - id: PALI-E1-S3-T4-ST3
+                priority: P2
+                title: Add sampling-based quality checks
+                description: >
+                  Define simple checks or spot-review tools to regularly inspect scene
+                  quality per book.
+
+      # S4 – Chapter summarization (multi-length)
+      - id: PALI-E1-S4
+        priority: P1
+        title: Chapter Summarization (Multi-Length)
+        description: >
+          Summarize each chapter into multiple target lengths (e.g., 100, 500, 1000
+          words) using AI agents, and store them in Codex.
+        tasks:
+          - id: PALI-E1-S4-T1
+            priority: P1
+            title: Define summary formats & length tiers
+            description: >
+              Decide which summary lengths and styles are needed per chapter and how
+              they will be stored in Codex.
+            subtasks:
+              - id: PALI-E1-S4-T1-ST1
+                priority: P1
+                title: Choose summary tiers
+                description: >
+                  Lock in the exact word-count targets for short, medium, and long
+                  chapter summaries.
+              - id: PALI-E1-S4-T1-ST2
+                priority: P1
+                title: Specify tone & purpose per tier
+                description: >
+                  Document how short vs long summaries should differ in focus and detail.
+              - id: PALI-E1-S4-T1-ST3
+                priority: P2
+                title: Extend Codex schema with summary fields
+                description: >
+                  Add per-chapter summary fields to the Codex schema for each tier.
+
+          - id: PALI-E1-S4-T2
+            priority: P1
+            title: Implement summarization agent flow
+            description: >
+              Implement the agent prompting and calls that generate multiple-length
+              summaries for a given chapter.
+            subtasks:
+              - id: PALI-E1-S4-T2-ST1
+                priority: P1
+                title: Draft base summarization prompt
+                description: >
+                  Create a prompt template for generating a clear, faithful chapter
+                  summary at a single length.
+              - id: PALI-E1-S4-T2-ST2
+                priority: P1
+                title: Add multi-length support
+                description: >
+                  Extend the logic so one pass can generate multiple summary lengths
+                  without losing consistency.
+              - id: PALI-E1-S4-T2-ST3
+                priority: P2
+                title: Ensure summaries respect word limits
+                description: >
+                  Add simple checks or trimming logic so generated summaries stay
+                  within their length targets.
+
+          - id: PALI-E1-S4-T3
+            priority: P1
+            title: Integrate summaries into Codex
+            description: >
+              Write generated summaries back into the Codex for each chapter and keep
+              them in sync with chapters.
+            subtasks:
+              - id: PALI-E1-S4-T3-ST1
+                priority: P1
+                title: Define chapter-to-summary mapping
+                description: >
+                  Confirm how summaries are keyed to chapters in Codex (chapter_id
+                  or index).
+              - id: PALI-E1-S4-T3-ST2
+                priority: P1
+                title: Implement Codex write/update logic
+                description: >
+                  Implement safe read-modify-write of Codex files when adding or
+                  updating summaries.
+              - id: PALI-E1-S4-T3-ST3
+                priority: P2
+                title: Handle partial summary availability
+                description: >
+                  Decide what happens if only some summary tiers are available for
+                  a given chapter.
+
+          - id: PALI-E1-S4-T4
+            priority: P2
+            title: Add spot checks & regression tests
+            description: >
+              Add basic checks and tests to ensure summaries remain coherent and
+              roughly aligned with scenes and chapters.
+            subtasks:
+              - id: PALI-E1-S4-T4-ST1
+                priority: P2
+                title: Create manual review samples
+                description: >
+                  Sample a few chapters per book and write a script to dump summaries
+                  for manual review.
+              - id: PALI-E1-S4-T4-ST2
+                priority: P2
+                title: Add minimal regression tests
+                description: >
+                  Add tests that guard against empty or obviously broken summaries
+                  when refactoring.
+              - id: PALI-E1-S4-T4-ST3
+                priority: P2
+                title: Log summarization metrics
+                description: >
+                  Record basic metrics like summary length and generation duration for
+                  debugging and tuning.
+
+      # S5 – Character & location extraction
+      - id: PALI-E1-S5
+        priority: P1
+        title: Character & Location Extraction
+        description: >
+          Use AI agents to detect characters and locations per chapter/scene and
+          consolidate them into rich Codex entries.
+        tasks:
+          - id: PALI-E1-S5-T1
+            priority: P1
+            title: Define character & location models
+            description: >
+              Decide how characters and locations are represented in Codex at both
+              global and per-chapter/scene levels.
+            subtasks:
+              - id: PALI-E1-S5-T1-ST1
+                priority: P1
+                title: List required character fields
+                description: >
+                  Define the fields to capture for each character: names, aliases,
+                  physical traits, roles, and relationships.
+              - id: PALI-E1-S5-T1-ST2
+                priority: P1
+                title: List required location fields
+                description: >
+                  Define fields for locations: name, type, description, and any
+                  world/setting-specific details.
+              - id: PALI-E1-S5-T1-ST3
+                priority: P2
+                title: Extend Codex schema for entities
+                description: >
+                  Add character and location sections to the Codex schema, and link
+                  them to scenes/chapters.
+
+          - id: PALI-E1-S5-T2
+            priority: P1
+            title: Per-chapter entity extraction flow
+            description: >
+              Implement an agent pipeline that scans each chapter or scene and
+              extracts mentioned characters and locations.
+            subtasks:
+              - id: PALI-E1-S5-T2-ST1
+                priority: P1
+                title: Draft entity-extraction prompt
+                description: >
+                  Create a prompt that asks the model to list entities and their
+                  descriptions for a chapter/scene.
+              - id: PALI-E1-S5-T2-ST2
+                priority: P1
+                title: Add per-scene context support
+                description: >
+                  Ensure the extractor can operate at scene level when scene data
+                  is available.
+              - id: PALI-E1-S5-T2-ST3
+                priority: P2
+                title: Implement extraction runner
+                description: >
+                  Implement a runner that processes all chapters/scenes and writes
+                  raw entity mentions.
+
+          - id: PALI-E1-S5-T3
+            priority: P1
+            title: Consolidate entities across the book
+            description: >
+              Merge per-chapter mentions into a single canonical list of characters
+              and locations for each book.
+            subtasks:
+              - id: PALI-E1-S5-T3-ST1
+                priority: P1
+                title: Define entity deduplication rules
+                description: >
+                  Decide how to merge different mentions and spellings of the same
+                  character or location.
+              - id: PALI-E1-S5-T3-ST2
+                priority: P1
+                title: Implement consolidation logic
+                description: >
+                  Implement logic to aggregate mentions into canonical character
+                  and location entries.
+              - id: PALI-E1-S5-T3-ST3
+                priority: P2
+                title: Attach entities back to Codex
+                description: >
+                  Store consolidated entities in Codex and reference them from
+                  relevant scenes and chapters.
+
+          - id: PALI-E1-S5-T4
+            priority: P2
+            title: Quality checks for entity extraction
+            description: >
+              Add simple checks and tools to quickly review and sanity-check the
+              extracted characters and locations.
+            subtasks:
+              - id: PALI-E1-S5-T4-ST1
+                priority: P2
+                title: Build entity review dump script
+                description: >
+                  Provide a script that dumps character and location lists for a
+                  given book for manual review.
+              - id: PALI-E1-S5-T4-ST2
+                priority: P2
+                title: Add basic consistency checks
+                description: >
+                  Implement checks for obviously missing major characters or
+                  contradictory entity data.
+              - id: PALI-E1-S5-T4-ST3
+                priority: P2
+                title: Log extraction coverage metrics
+                description: >
+                  Track basic metrics like number of characters and locations
+                  detected per book.
+
+  - id: PALI-E2
+    phase: Phase 1 – Codex
+    priority: P1
+    title: Autonomous Library Harvester
+    description: >
+      Create a configurable harvester that can fetch and register new public-domain
+      books into the ingestion pipeline with minimal manual work. and also agents to extract the data from the html books
+    stories:
+      - id: PALI-E2-S1
+        priority: P1
+        title: Get the metdata from project gutenberg
+        description: >
+          Design the JSON structure used to represent books, chapters, scenes, and
+          characters so that all later analysis and video pipelines can rely on a
+          stable Codex format.
+        tasks: []
+
+  - id: PALI-E3
+    phase: Phase 1 – Codex
+    priority: P2
+    title: Omni-Format Codex Engine (HTML, PDF, etc.)
+    description: >
+      Extend ingestion to handle multiple source formats (HTML, plain text, and later
+      EPUB/PDF) while reusing a shared Codex schema and validation layer.
+    stories: []
+
+  - id: PALI-E4
+    phase: Phase 2 – Analysis & Video
+    priority: P0
+    title: Summary Video Rail (MVP)
+    description: >
+      Build the minimum pipeline from Codex JSON to YouTube-ready summary video scripts
+      and basic audio/visual assets.
+    stories: []
+
+  - id: PALI-E5
+    phase: Phase 2 – Analysis & Video
+    priority: P1
+    title: Timeline & Deep-Dive Analysis Tracks
+    description: >
+      Generate character timelines, scene timelines, and deep-dive analyses
+      (themes, wants vs needs, turning points) from the Codex data.
+    stories: []
+
+  - id: PALI-E6
+    phase: Phase 2 – Analysis & Video
+    priority: P2
+    title: Visual & Audio Experimentation Playground
+    description: >
+      Create a sandbox to experiment with different visual and audio styles for scenes,
+      thumbnails, and shorts driven by Codex metadata.
+    stories: []
+
+  - id: PALI-E7
+    phase: Phase 3 – Rewrites
+    priority: P0
+    title: Close Adaptation Layer (BBC-Style Remixes)
+    description: >
+      Produce close retellings of the original stories in new settings (modern, sci-fi,
+      period dramas) while preserving the main beats and character arcs.
+    stories: []
+
+  - id: PALI-E8
+    phase: Phase 3 – Rewrites
+    priority: P1
+    title: Adaptive Rewrite & Structural Variations
+    description: >
+      Support structural variations on the source stories (merged characters, reordered
+      events, alternate POVs) while maintaining coherent arcs.
+    stories: []
+
+  - id: PALI-E9
+    phase: Phase 3 – Rewrites
+    priority: P2
+    title: New-Myth Retellings (Hamlet / Lion King / Baahubali Mode)
+    description: >
+      Transform source stories into higher-level myth templates that can be re-skinned
+      across cultures, worlds, and genres.
+    stories: []
+
+  - id: PALI-E10
+    phase: Phase 4 – New Story → Screen
+    priority: P0
+    title: New Story → Screen Pipeline (MVP)
+    description: >
+      Take a generated or rewritten story and push it through a pipeline that yields
+      scripts, audio, and basic video for full episodes.
+    stories: []
+
+  - id: PALI-E11
+    phase: Phase 4 – New Story → Screen
+    priority: P1
+    title: Analysis & Timelines for Generated Stories
+    description: >
+      Re-run the analysis stack on generated stories to produce the same timelines,
+      beats, and character breakdowns as for original works.
+    stories: []
+
+  - id: PALI-E12
+    phase: Phase 4 – New Story → Screen
+    priority: P2
+    title: Alternate Cuts, Tones & Commentary Layer
+    description: >
+      Support alternate cuts of the same story (tone shifts, pacing changes,
+      commentary/behind-the-scenes tracks) from a single Codex source.
+    stories: []
+
+  - id: PALI-E13
+    phase: Phase 5 – Marketing & Feedback
+    priority: P0
+    title: Core Marketing Loop & Promo Snippets
+    description: >
+      Auto-generate promo snippets, shorts, and descriptions for new videos and stories,
+      forming the basic marketing loop.
+    stories: []
+
+  - id: PALI-E14
+    phase: Phase 5 – Marketing & Feedback
+    priority: P1
+    title: Performance & Sentiment Insight Hub
+    description: >
+      Aggregate performance metrics and audience sentiment to understand which stories,
+      formats, and characters are resonating.
+    stories: []
+
+  - id: PALI-E15
+    phase: Phase 5 – Marketing & Feedback
+    priority: P2
+    title: Adaptive Feedback-Driven Strategy Engine
+    description: >
+      Feed performance insights back into which books to adapt next, how to rewrite them,
+      and which formats to prioritize.
+    stories: []
