@@ -65,3 +65,82 @@ Format code:
 uv run black .
 uv run ruff check .
 ```
+
+## Package Management with UV
+
+### Adding New Dependencies
+
+Add a new package to your project:
+```bash
+# Add a regular dependency
+uv add package-name
+
+# Add a specific version
+uv add package-name==1.2.3
+
+# Add a dev dependency
+uv add --dev package-name
+
+# Example: Add numpy
+uv add numpy
+```
+
+### Removing Dependencies
+
+Remove a package:
+```bash
+uv remove package-name
+```
+
+### Updating Dependencies
+
+Update all dependencies:
+```bash
+uv sync --upgrade
+```
+
+Update a specific package:
+```bash
+uv add package-name --upgrade
+```
+
+### Syncing Dependencies
+
+Sync your environment with the lock file (do this after pulling changes):
+```bash
+uv sync
+```
+
+### Running Scripts
+
+Run Python scripts using the UV-managed environment:
+```bash
+# Run a script
+uv run python script.py
+
+# Run with arguments
+uv run python sync_items.py all
+
+# Activate the virtual environment (alternative approach)
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate     # Windows
+```
+
+### Viewing Dependencies
+
+See all installed packages:
+```bash
+uv pip list
+```
+
+See dependency tree:
+```bash
+uv pip tree
+```
+
+### Lock File
+
+The `uv.lock` file pins exact versions of all dependencies for reproducibility:
+- **Always commit** `uv.lock` to version control
+- Run `uv sync` after pulling changes that modify `pyproject.toml` or `uv.lock`
+- UV automatically updates `uv.lock` when you add/remove dependencies
